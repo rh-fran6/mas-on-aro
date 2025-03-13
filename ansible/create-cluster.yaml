@@ -1,0 +1,12 @@
+---
+- name: Create OpenShift Clusters and Environment
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars_files:
+    - variables/common_var.yaml
+    - variables/test_var.yaml
+
+  roles:
+    - create-aro-cluster

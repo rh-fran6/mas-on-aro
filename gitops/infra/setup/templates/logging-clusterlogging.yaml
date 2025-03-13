@@ -1,0 +1,29 @@
+{{- if .Values.integrations.extendedlogging.enabled -}}
+apiVersion: logging.openshift.io/v1
+kind: ClusterLogging
+metadata:
+  name: instance 
+  namespace: openshift-logging 
+spec:
+  collection:
+    type: vector
+  logStore:
+    lokistack:
+      name: {{ .Values.integrations.extendedlogging.lokistack }}
+    retentionPolicy:
+      application:
+        maxAge: 30d
+        diskThresholdPercent: 80
+      audit:
+        diskThresholdPercent: 80
+        maxAge: 30d
+      infra:
+        diskThresholdPercent: 80
+        maxAge: 30d
+    type: lokistack
+  visualization:
+    ocpConsole:
+      logsLimit: 15
+    type: ocp-console
+  managementState: Managed
+{{- end -}}

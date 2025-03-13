@@ -1,0 +1,410 @@
+---
+- name: Get Key Vault by name
+  azure.azcollection.azure_rm_keyvault_info:
+    resource_group: "{{ akv_resource_group }}"
+    name: "{{ vault_name }}"
+    client_id: "{{ akv_read_client_id }}"
+    secret: "{{ akv_read_client_secret }}"
+    tenant: "{{ tenant_id }}"
+    subscription_id: "{{ subscription_id }}"
+  register: keyvault
+
+- name: Set key vault URI fact
+  ansible.builtin.set_fact:
+    keyvaulturi: "{{ keyvault['keyvaults'][0]['vault_uri'] }}"
+
+- name: Read Cluster Subscription_id from AKV
+  azure.azcollection.azure_rm_keyvaultsecret_info:
+    vault_uri: "{{ keyvaulturi }}"
+    name: "{{ cluster_subscription_id_key }}"
+    client_id: "{{ akv_read_client_id }}"
+    secret: "{{ akv_read_client_secret }}"
+    tenant: "{{ tenant_id }}"
+    subscription_id: "{{ subscription_id }}"
+  register: cluster_subscription_id
+
+- name: Read Cluster Service Principal from AKV - Client ID
+  when: cluster.conditionals.use_aro_sp
+  azure.azcollection.azure_rm_keyvaultsecret_info:
+    vault_uri: "{{ keyvaulturi }}"
+    name: "{{ cluster_sp_id_key }}"
+    client_id: "{{ akv_read_client_id }}"
+    secret: "{{ akv_read_client_secret }}"
+    tenant: "{{ tenant_id }}"
+    subscription_id: "{{ subscription_id }}"
+  register: cluster_client_id
+
+- name: Read Cluster Service Principal from AKV - Client Secret  
+  when: cluster.conditionals.use_aro_sp
+  azure.azcollection.azure_rm_keyvaultsecret_info:
+    vault_uri: "{{ keyvaulturi }}"
+    name: "{{ cluster_sp_secret_key }}"
+    client_id: "{{ akv_read_client_id }}"
+    secret: "{{ akv_read_client_secret }}"
+    tenant: "{{ tenant_id }}"
+    subscription_id: "{{ subscription_id }}"
+  register: cluster_client_secret
+
+- name: Read Cluster Tenant ID from AKV
+  azure.azcollection.azure_rm_keyvaultsecret_info:
+    vault_uri: "{{ keyvaulturi }}"
+    name: "{{ cluster_tenant_id_key }}"
+    client_id: "{{ akv_read_client_id }}"
+    secret: "{{ akv_read_client_secret }}"
+    tenant: "{{ tenant_id }}"
+    subscription_id: "{{ subscription_id }}"
+  register: cluster_tenant_id
+
+- name: Read Pull Secret from AKV
+  azure.azcollection.azure_rm_keyvaultsecret_info:
+    vault_uri: "{{ keyvaulturi }}"
+    name: "{{ pull_secret_akv_key }}"
+    client_id: "{{ akv_read_client_id }}"
+    secret: "{{ akv_read_client_secret }}"
+    tenant: "{{ tenant_id }}"
+    subscription_id: "{{ subscription_id }}"
+  register: pull_secret
+
+- name: Read Installer Service Principal from AKV - Client ID
+  azure.azcollection.azure_rm_keyvaultsecret_info:
+    vault_uri: "{{ keyvaulturi }}"
+    name: "{{ installer_clientid }}"
+    client_id: "{{ akv_read_client_id }}"
+    secret: "{{ akv_read_client_secret }}"
+    tenant: "{{ tenant_id }}"
+    subscription_id: "{{ subscription_id }}"
+  register: installer_client_id
+
+- name: Read Cluster Service Principal from AKV - Client Secret
+  azure.azcollection.azure_rm_keyvaultsecret_info:
+    vault_uri: "{{ keyvaulturi }}"
+    name: "{{ installer_clientsecret }}"
+    client_id: "{{ akv_read_client_id }}"
+    secret: "{{ akv_read_client_secret }}"
+    tenant: "{{ tenant_id }}"
+    subscription_id: "{{ subscription_id }}"
+  register: installer_client_secret
+
+- name: Set secrets from key vault into reusable variables for common parameters
+  ansible.builtin.set_fact:
+    clientId: "{{ cluster_client_id['secrets'][0]['secret'] }}"
+    clientSecret: "{{ cluster_client_secret['secrets'][0]['secret'] }}"
+    tenantId: "{{ cluster_tenant_id['secrets'][0]['secret'] }}"
+    pullSecret: "{{ pull_secret['secrets'][0]['secret'] }}"
+    subscriptionId: "{{ cluster_subscription_id['secrets'][0]['secret'] }}"
+
+- name: Set secrets from key vault into reusable variables for SP based parameters
+  when: cluster.conditionals.use_installer_sp
+  ansible.builtin.set_fact:    
+    installerClientId: "{{ installer_client_id['secrets'][0]['secret'] }}"
+    installerClientSecret: "{{ installer_client_secret['secrets'][0]['secret'] }}"
+
+- name: Delete OpenShift Cluster
+  azure.azcollection.azure_rm_openshiftmanagedcluster:
+    resource_group: "{{ cluster.cluster_resource_group }}"
+    subscription_id: "{{ installer.subscription_id }}"
+    client_id: "{{ installerClientId | default(omit) }}"
+    secret: "{{ installerClientSecret | default(omit) }}"
+    tenant: "{{ installer.tenant_id  }}"
+    name: "{{ cluster.name }}"
+    location: "{{ cluster.location }}"
+    state: absent
+
+- name: Confirming Cluster Deletion
+  azure.azcollection.azure_rm_openshiftmanagedcluster_info:
+    resource_group: "{{ cluster.cluster_resource_group }}"
+    subscription_id: "{{ installer.subscription_id }}"
+    client_id: "{{ installerClientId | default(omit) }}"
+    secret: "{{ installerClientSecret | default(omit) }}"
+    tenant: "{{ installer.tenant_id  }}"
+    name: "{{ cluster.name }}"
+  register: _aro_check
+  until: (_aro_check.clusters == {})
+  retries: 60
+  delay: 2
+
+- name: Delete Network resources if cluster.conditionals.create_network_vnet_and_subnets is true
+  when: cluster.conditionals.create_network_vnet_and_subnets
+  block:
+    - name: Get facts for one virtual network link in private DNS zone
+      azure.azcollection.azure_rm_privatednszonelink_info:
+        resource_group: "{{ storageaccount.resourcegroup }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+        name: salink
+        zone_name: "privatelink.file.core.windows.net"
+      register: salink_ispresent
+
+    - name: Remove virtual network link
+      when: salink_ispresent is defined and salink_ispresent.virtualnetworklinks | length > 0 
+      azure.azcollection.azure_rm_privatednszonelink:
+        resource_group: "{{ storageaccount.resourcegroup }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+        name: "salink"
+        zone_name: "privatelink.file.core.windows.net"
+        virtual_network: "/subscriptions/{{ installer.subscription_id }}/resourceGroups/{{ vnet.network_rg }}/providers/Microsoft.Network/virtualNetworks/{{ vnet.name }}"
+        registration_enabled: true
+        state: absent
+
+    - name: Remove private DNS zone
+      when: salink_ispresent is defined and salink_ispresent.virtualnetworklinks | length > 0 and storageaccount.file.create
+      azure.azcollection.azure_rm_privatednszone:
+        resource_group: "{{ storageaccount.resourcegroup }}"
+        name: "privatelink.file.core.windows.net"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+        state: absent
+
+    - name: Remove Resource Group
+      when: storageaccount.file.create
+      azure.azcollection.azure_rm_resourcegroup:
+        name: "{{ storageaccount.privendpointname }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+        state: absent
+
+    - name: Remove Storage Account
+      when: storageaccount.file.create
+      azure.azcollection.azure_rm_storageaccount:
+        resource_group: "{{ storageaccount.resourcegroup }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+        name: "{{ storageaccount.name }}"
+        account_type: "{{ storageaccount.sku }}"
+        access_tier: "{{ storageaccount.accesstier }}"
+        kind: "{{ storageaccount.kind }}"
+        state: absent
+
+    - name: Remove Private Endpoint
+      when: cluster.conditionals.create_network_vnet_and_subnets and storageaccount.file.create
+      azure.azcollection.azure_rm_privateendpoint:
+        name: "{{ storageaccount.privendpointname }}"
+        resource_group: "{{ storageaccount.resourcegroup }}"
+        location: "{{ storageaccount.location }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id }}"
+        state: absent
+
+    - name: Delete a Control Plane Subnet
+      azure.azcollection.azure_rm_subnet:
+        resource_group: "{{ vnet.network_rg }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+        virtual_network_name: "{{ vnet.name }}"
+        name: "{{ vnet.control_plane.name }}"
+        state: absent
+
+    - name: Delete a Worker Nodes Subnet
+      azure.azcollection.azure_rm_subnet:
+        resource_group: "{{ vnet.network_rg }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+        virtual_network_name: "{{ vnet.name }}"
+        name: "{{ vnet.worker_plane.name }}"
+        state: absent
+
+    - name: Check VNET Status
+      azure.azcollection.azure_rm_virtualnetwork_info:
+        name: "{{ vnet.name }}"
+        resource_group: "{{ vnet.network_rg }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+      register: az_net_vnet_check
+
+    - name: Delete VNET that hosts Control and Worker subnets
+      azure.azcollection.azure_rm_virtualnetwork:
+        resource_group: "{{ vnet.network_rg }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+        name: "{{ vnet.name }}"
+        state: absent
+      when: az_net_vnet_check.virtualnetworks | length > 0
+
+    - name: Check VNET delete status
+      azure.azcollection.azure_rm_virtualnetwork_info:
+        name: "{{ vnet.name }}"
+        resource_group: "{{ vnet.network_rg }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+      register: az_net_vnet
+      until: az_net_vnet.virtualnetworks | length < 1
+      retries: 120
+      delay: 5
+
+    - name: Check VNET Resource Group delete status
+      azure.azcollection.azure_rm_resourcegroup_info:
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+        name: "{{ vnet.name }}"
+      register: az_net_rg_check
+
+    - name: Delete Resource Groups for VNET and Subnets
+      azure.azcollection.azure_rm_resourcegroup:
+        name: "{{ vnet.network_rg }}"
+        location: "{{ vnet.location }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+        force_delete_nonempty: true
+        state: absent
+      when: az_net_rg_check.resourcegroups | length > 0
+
+    - name: Check VNET Resource Group delete status
+      azure.azcollection.azure_rm_resourcegroup_info:
+        name: "{{ vnet.name }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+      register: az_net_rg
+      until: az_net_rg.resourcegroups | length < 1
+      retries: 120
+      delay: 5
+
+- name: Read Service Principal details for cluster
+  when: cluster.conditionals.use_aro_sp and cluster.conditionals.assign_rbac_roles
+  azure.azcollection.azure_rm_adserviceprincipal_info:
+    app_id: "{{ clientId }}"
+    subscription_id: "{{ installer.subscription_id }}"
+    client_id: "{{ installerClientId | default(omit) }}"
+    secret: "{{ installerClientSecret | default(omit) }}"
+    tenant: "{{ installer.tenant_id  }}"
+  register: useraccounts
+
+- name: Remove 'Contributor' role from ARO Service Principal for the storage accountresource group
+  when: cluster.conditionals.use_aro_sp and cluster.conditionals.assign_rbac_roles
+  azure.azcollection.azure_rm_roleassignment:
+    role_definition_id: "/subscriptions/{{ installer.subscription_id }}/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"
+    scope: "/subscriptions/{{ installer.subscription_id }}/resourceGroups/{{ storageaccount.resourcegroup }}"
+    assignee_object_id: "{{ useraccounts.service_principals[0].object_id }}"
+    subscription_id: "{{ installer.subscription_id }}"
+    client_id: "{{ installerClientId | default(omit) }}"
+    secret: "{{ installerClientSecret | default(omit) }}"
+    tenant: "{{ installer.tenant_id  }}"
+    state: absent
+
+- name: Get facts for Cluster resource group
+  when: cluster.conditionals.create_cluster_resource_group
+  azure.azcollection.azure_rm_resourcegroup_info:
+    name: "{{ cluster.cluster_resource_group }}"
+    subscription_id: "{{ installer.subscription_id }}"
+    client_id: "{{ installerClientId | default(omit) }}"
+    secret: "{{ installerClientSecret | default(omit) }}"
+    tenant: "{{ installer.tenant_id  }}"
+  register: rg_facts
+
+- name: Conditionally remove cluster resource group and permissions
+  when: cluster.conditionals.use_aro_sp and rg_facts.resourcegroups is defined and rg_facts.resourcegroups | length > 0 and cluster.conditionals.assign_rbac_roles
+  block:
+    - name: Remove Contributor Role SP from Resource Group "{{ cluster.cluster_resource_group }}"
+      when: cluster.conditionals.create_cluster_resource_group
+      azure.azcollection.azure_rm_roleassignment:
+        scope: "{{ rg_facts.resourcegroups[0].id }}"
+        assignee_object_id: "{{ useraccounts.service_principals[0].object_id }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+        role_definition_id: "/subscriptions/{{ installer.subscription_id }}/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"
+        state: absent
+    
+    - name: Conditionally set variable names based on the condition settings
+      ansible.builtin.set_fact:
+        vnetName: "{{ vnet.name if cluster.conditionals.create_network_vnet_and_subnets else cluster.network.vnet_name }}"
+        vnetRG: "{{ vnet.network_rg if cluster.conditionals.create_network_vnet_and_subnets else cluster.network.vnet_rg }}"
+     
+    - name: Remove Network Contributor Role VNET "{{ vnet.name }}"
+      when: cluster.conditionals.use_aro_sp and cluster.conditionals.assign_rbac_roles
+      azure.azcollection.azure_rm_roleassignment:
+        scope: /subscriptions/{{ installer.subscription_id }}/resourceGroups/{{ vnetRG }}/providers/Microsoft.Network/virtualNetworks/{{ vnetName }}
+        assignee_object_id: "{{ useraccounts.service_principals[0].object_id }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+        role_definition_id:
+          "/subscriptions/{{ installer.subscription_id }}/providers/Microsoft.Authorization/roleDefinitions/4d97b98b-1d4f-4787-a291-c67834d212e7"
+        state: absent
+
+    - name: Delete Cluster Resource Group
+      when: cluster.conditionals.create_cluster_resource_group
+      azure.azcollection.azure_rm_resourcegroup:
+        name: "{{ cluster.cluster_resource_group }}"
+        location: "{{ cluster.location }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+        force_delete_nonempty: true
+        state: absent
+
+- name: Remove loki backend storageaccount
+  when: integrations.extendedlogging.enabled
+  block:
+
+    - name: Remove Storage Account
+      azure.azcollection.azure_rm_storageaccount:
+        resource_group: "{{ storageaccount.resourcegroup }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id  }}"
+        name: "{{ integrations.extendedlogging.loki_storageaccount }}"
+        account_type: "{{ integrations.extendedlogging.storageaccount_type }}"
+        kind: "{{ integrations.extendedlogging.kind }}"
+        force_delete_nonempty: true
+        state: absent
+
+    - name: Remove Resource Group
+      azure.azcollection.azure_rm_resourcegroup:
+        name: "{{ storageaccount.resourcegroup }}"
+        location: "{{ storageaccount.location }}"
+        subscription_id: "{{ installer.subscription_id }}"
+        client_id: "{{ installerClientId | default(omit) }}"
+        secret: "{{ installerClientSecret | default(omit) }}"
+        tenant: "{{ installer.tenant_id }}"
+        state: absent
+
+- name: Delete Azure policy for the Cluster Resource Group
+  when: cluster.conditionals.create_azure_policy_for_tags
+  block:
+    - name: Delete Azure Policy Assignment
+      ansible.builtin.command: az policy assignment delete --name {{ cluster.policy_definition }}-{{ cluster.name }} --subscription "{{ installer.subscription_id }}"
+
+    - name: Delete Azure Policy Definition
+      ansible.builtin.command: az policy definition delete --name {{ cluster.policy_definition }} --subscription "{{ installer.subscription_id }}"
+
+- name: Cleanup Temporary Cluster Creation files
+  ansible.builtin.file:
+    path: pullsecret.txt
+    state: absent
+
+- name: Cleanup Completion Message
+  ansible.builtin.debug:
+    msg: "Cleanup of cluster {{ cluster.name }} completed!"

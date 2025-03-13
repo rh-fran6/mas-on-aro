@@ -1,0 +1,36 @@
+{{- if .Values.integrations.logforwarder.enabled -}}
+  {{- if .Values.integrations.extendedlogging.enabled -}}
+apiVersion: logging.openshift.io/v1
+kind: ClusterLogForwarder
+metadata:
+  name: instance
+  namespace: openshift-logging
+spec:
+  outputs:
+  - name: azure-monitor-app
+    type: azureMonitor
+    azureMonitor:
+      customerId: {{ .Values.integrations.logforwarder.azuremonitor.workspaceid }}
+      logType: aro_application_logs
+    secret:
+      name: {{ .Values.integrations.logforwarder.azuremonitor.secretname }}
+  - name: azure-monitor-infra
+    type: azureMonitor
+    azureMonitor:
+      customerId: {{ .Values.integrations.logforwarder.azuremonitor.workspaceid }}
+      logType: aro_infrastructure_logs
+    secret:
+      name: azure-monitor-shared-key
+  pipelines:
+  - name: app-pipeline
+    inputRefs:
+    - application
+    outputRefs:
+    - azure-monitor-app
+  - name: infra-pipeline
+    inputRefs:
+    - infrastructure
+    outputRefs:
+    - azure-monitor-infra
+  {{- end -}}
+{{- end -}}

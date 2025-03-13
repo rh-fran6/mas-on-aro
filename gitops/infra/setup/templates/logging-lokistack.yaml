@@ -1,0 +1,29 @@
+{{- if .Values.integrations.extendedlogging.enabled -}}
+apiVersion: loki.grafana.com/v1
+kind: LokiStack
+metadata:
+  name: {{ .Values.integrations.extendedlogging.lokistack }}
+  namespace: openshift-logging 
+spec:
+  limits:
+    global:
+      retention:
+        days: 30
+  managementState: Managed
+  size: {{ .Values.integrations.extendedlogging.lokisize }}
+  storage:
+    schemas:
+    - version: v13
+      effectiveDate: '2023-10-15'
+    - version: v12
+      effectiveDate: "2022-06-01"
+    - version: v11
+      effectiveDate: "2020-10-11"
+    secret:
+      name: {{ .Values.integrations.extendedlogging.secret_name }}
+      type: azure
+      credentialMode: static
+  storageClassName: {{ if .Values.storageaccount.block.create }}managed-premium{{ else }}managed-csi{{ end }}
+  tenants:
+    mode: openshift-logging 
+{{- end -}}

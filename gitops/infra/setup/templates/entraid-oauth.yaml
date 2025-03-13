@@ -1,0 +1,31 @@
+{{- if .Values.integrations.entraid.add -}}
+apiVersion: config.openshift.io/v1
+kind: OAuth
+metadata:
+  name: cluster
+spec:
+  identityProviders:
+  - name: SSO-EntraID
+    mappingMethod: claim
+    type: OpenID
+    openID:
+      clientID: {{ .Values.integrations.entraid.clientid }}
+      clientSecret:
+        name: {{ .Values.integrations.entraid.secretname }}
+      extraScopes:
+      - email
+      - profile
+      - openid
+      extraAuthorizeParameters:
+        include_granted_scopes: "true"
+      claims:
+        preferredUsername:
+        - email
+        name:
+        - name
+        email:
+        - email
+        groups:
+        - groups
+      issuer: https://login.microsoftonline.com/{{ .Values.integrations.entraid.tenantid }}/v2.0
+{{- end -}}

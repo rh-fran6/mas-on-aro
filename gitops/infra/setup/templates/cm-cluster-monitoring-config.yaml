@@ -1,0 +1,27 @@
+{{- if .Values.integrations.userworkloadmonitoring.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+data:
+  config.yaml: |
+    prometheusK8s	
+      baseImage: openshift/prometheus
+      retention: "15d"
+      volumeClaimTemplate:
+        spec:
+          storageClassName: managed-premium
+          resources:
+            requests:
+              storage: "300Gi"
+    alertmanagerMain:
+      baseImage: openshift/prometheus-alertmanager
+      volumeClaimTemplate:
+        spec:
+          storageClassName: managed-premium
+          resources:
+            requests:
+              storage: "60Gi"
+    enableUserWorkload: true
+metadata:
+  name: cluster-monitoring-config
+  namespace: openshift-monitoring
+{{- end -}}

@@ -1,0 +1,16 @@
+{{- if .Values.integrations.imagemirror.enabled -}}
+apiVersion: config.openshift.io/v1 
+kind: ImageTagMirrorSet 
+metadata:
+  name: custom-image-tag-mirror-set
+spec:
+  imageTagMirrors: 
+  {{- range .Values.imagemirror.tag }}
+  - mirrors:
+    {{- range .mirror }}
+    - {{ . }}
+    {{- end }}
+    source: {{ .source }}
+    mirrorSourcePolicy: AllowContactingSource  #NeverContactSource
+  {{- end }}
+{{- end -}}

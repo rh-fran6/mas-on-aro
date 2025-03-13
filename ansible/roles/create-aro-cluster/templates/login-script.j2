@@ -1,0 +1,3 @@
+#!/bin/bash
+
+oc login -u '{{ userName.stdout }}' -p '{{ passWord.stdout }}' '{{ apiUrl.stdout }}' --insecure-skip-tls-verify=true

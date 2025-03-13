@@ -1,0 +1,19 @@
+{{ $minReplica := .Values.autoscaler.min_replica_per_az }}
+{{ $maxReplica := .Values.autoscaler.max_replica_per_az }}
+{{- if .Values.autoscaler.enabled }}
+{{- range $key, $value := .Values.autoscaler.machineset }}
+apiVersion: "autoscaling.openshift.io/v1beta1"
+kind: "MachineAutoscaler"
+metadata:
+  name: {{ . }}-autoscaler 
+  namespace: "openshift-machine-api"
+spec:
+  minReplicas: {{ $minReplica }}
+  maxReplicas: {{ $maxReplica }}
+  scaleTargetRef: 
+    apiVersion: machine.openshift.io/v1beta1
+    kind: MachineSet 
+    name: {{ . }}
+---
+{{- end }}
+{{- end}}

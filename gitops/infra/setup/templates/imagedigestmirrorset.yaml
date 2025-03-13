@@ -1,0 +1,16 @@
+{{- if .Values.integrations.imagemirror.enabled -}}
+apiVersion: config.openshift.io/v1 
+kind: ImageDigestMirrorSet 
+metadata:
+  name: custom-image-digest-mirror-set
+spec:
+  imageDigestMirrors: 
+  {{- range .Values.imagemirror.digest }}
+  - mirrors:
+    {{- range .mirror }}
+    - {{ . }}
+    {{- end }}
+    source: {{ .source }}
+    mirrorSourcePolicy: NeverContactSource
+  {{- end }}
+{{- end -}}

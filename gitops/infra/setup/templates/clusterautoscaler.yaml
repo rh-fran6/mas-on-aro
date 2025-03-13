@@ -1,0 +1,24 @@
+{{- if .Values.autoscaler.enabled }}
+apiVersion: "autoscaling.openshift.io/v1"
+kind: "ClusterAutoscaler"
+metadata:
+  name: "default"
+spec:
+  podPriorityThreshold: -10 
+  resourceLimits:
+    maxNodesTotal: {{ .Values.autoscaler.max_node_count }}
+    cores:
+      min: {{ .Values.autoscaler.min_aggregate_cpu }} 
+      max: {{ .Values.autoscaler.max_aggregate_cpu}} 
+    memory:
+      min: {{ .Values.autoscaler.min_aggregate_memory }} 
+      max: {{ .Values.autoscaler.max_aggregate_memory }} 
+  logVerbosity: 4 
+  scaleDown: 
+    enabled: true 
+    delayAfterAdd: 10m 
+    delayAfterDelete: 5m 
+    delayAfterFailure: 30s 
+    unneededTime: 5m 
+    utilizationThreshold: "0.4" 
+{{- end }}

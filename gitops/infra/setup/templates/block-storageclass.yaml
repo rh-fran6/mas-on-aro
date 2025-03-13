@@ -1,0 +1,15 @@
+{{- if .Values.storageaccount.block.create -}}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.storageaccount.block.sc_name }}
+  annotations:
+    storageclass.kubernetes.io/is-default-class: 'true'
+parameters:
+  kind: Managed
+  storageaccounttype: {{ .Values.storageaccount.block.sku }}
+provisioner: kubernetes.io/azure-disk
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+{{- end -}}

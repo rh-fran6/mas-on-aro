@@ -1,0 +1,25 @@
+## clusterbootstrap-values.js
+
+global:
+  openshiftGitopsNamespace: openshift-gitops
+
+applications:
+  #  Applications in platform-admin namespace
+  - appName: infra-bootstrap
+    repoUrl: "{{ integrations.gitrepo.repo_url }}"
+    branch: "{{ integrations.gitrepo.repo_branch }}"
+    argocdNamespace: openshift-gitops
+    applicationProject: default
+    applicationNamespace: ""
+    appPath: "{{ integrations.gitrepo.repo_path }}/setup"
+    imageName: ""
+  
+  - appName: operator-installs
+    repoUrl: "{{ integrations.gitrepo.repo_url }}"
+    branch: "{{ integrations.gitrepo.repo_branch }}"
+    argocdNamespace: openshift-gitops
+    applicationProject: default
+    applicationNamespace: ""
+    appPath: "{{ integrations.gitrepo.repo_path }}/operators"
+    imageName: ""
+

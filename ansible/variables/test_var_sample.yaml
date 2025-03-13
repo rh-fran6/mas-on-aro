@@ -1,0 +1,213 @@
+
+## Cluster Secrets by Environments
+
+cluster_sp_id_key: clientIdOne
+cluster_sp_secret_key: clientSecretOne
+cluster_tenant_id_key: tenantId
+cluster_subscription_id_key: subId
+cluster_sp_object_id_key: spObjectId
+pull_secret_akv_key: pullSecret
+installer_clientid: AccntclientId # ID #
+installer_clientsecret: AccntclientSecret  # SECRET #
+masEntitlementKey: masEntitlement
+masLicenseIdKey: masLicenseId
+masLicenseKey: masLicense
+
+## Cluster Tags. Max of 10 tags
+tags: 
+  - key: createdBy 
+    value: "test-user" 
+  - key: purpose
+    value: "test-cluster"
+  - key: tag3
+    value: value3
+  - key: tag4
+    value: value4
+  - key: tag5
+    value: value5
+  - key: tag6
+    value: value6
+  - key: tag7
+    value: value7
+  - key: tag8
+    value: value8
+  - key: tag9
+    value: value9
+  - key: tag10
+    value: value10
+
+## Parameters if Network Resources needed to be created. Only valid when cluster.conditionals.create_newtork_vnet_and_subnets is true.
+vnet:
+  name: mas-aro-vnet
+  location: eastus
+  network_rg: mas-aro-vnet-rg
+  address_cidr: 10.0.0.0/22
+  control_plane: 
+    name: mas-aro-cluster-control-subnet
+    address_cidr: 10.0.0.0/24
+  worker_plane:
+    name: mas-aro-cluster-worker-subnet
+    address_cidr: 10.0.2.0/24
+
+# outbound-type: Loadbalancer|UserDefinedRouting
+cluster:
+  conditionals:
+    install_cluster: true
+    create_network_vnet_and_subnets: true
+    specify_custom_domain: true
+    specify_version: true
+    specify_disk_encryption_set: False
+    specify_tags: True
+    encrypt_master_hosts: False
+    encrypt_worker_hosts: False
+    enable_preconfigured_nsg: False
+    create_azure_policy_for_tags: false
+    enable_fips: False
+    use_aro_sp: True
+    use_installer_sp: false
+    create_cluster_resource_group: true
+    assign_rbac_roles: true
+  name: mas-aro-cluster
+  cluster_resource_group:  placeholderrg   
+  location: eastus
+  domain: masdev
+  policy_definition: aro-policy-def
+  version: "4.14.16"
+  control_instance: Standard_D8s_v3
+  worker_disk: 128
+  worker_node_count: 3 
+  worker_instance: Standard_D16s_v3
+  disk_encryption_set: ""
+  ## Network parameters if network resources already created. Enter the values predefined by network team here. Only relevant when cluster.conditionals.create_network_vnet_and_subnets is true. Otherwise, neglect
+  network:
+    vnet_name: aro-vnet-m00o63yq
+    control_subnet_name: master-subnet
+    worker_subnet_name: worker-subnet
+    vnet_rg: aro-main
+    outbound_type: Loadbalancer  
+    ingress_visibility: Private 
+    api_visibility: Private
+    pod_cidr: 10.128.0.0/14
+    service_cidr: 172.32.0.0/16  
+
+## Defined what day 2 component to bootstrap
+integrations:
+  gitops:
+    add: true
+    version: "gitops-1.11"
+  eso:
+    add: true
+    clustersecretstore: akv-cluster-secret-read
+    akvtenantid: <enter azure key vault tenant id>
+    vaultname: <enter akv name>
+    esoreadsecret: akv-sp-read
+    esoreadsecretns: openshift-operators
+  entraid:
+    add: true
+    clientid: <enter entra id Service Principal Cliend ID> 
+    secretname: entraid-idp-auth-secret
+    tenantid: <Enter entra id tenant id>
+    secretKeyinAKV: entraidSecret
+  insights:
+    enabled: true
+  extendedlogging:
+    enabled: true
+  userworkloadmonitoring:
+    enabled: true
+  logforwarder:
+    enabled: true
+    azuremonitor:
+      workspaceid: masworkspaceid
+      secretname: mas-azure-monitor-shared-key
+      akvname: azureMonitorSharedKey
+  imagemirror:
+    enabled: true
+  imageregistry:
+    private: true
+    private_registry_email: mymail@mail.com
+    private_secret_name: registry-secret-name
+    privateImageRegistryHostnameKey: acrName
+    privateImageRegistryUsernameKey: acrUsername
+    privateImageRegistryPasswordKey: acrPassword
+  gitrepo:
+    private: true
+    patKey: githubPat
+    reposecret_name: private-repository-name
+    repo_url: https://github.com/rh-fran6/priv-repo
+    repo_branch: main
+    repo_path: gitops/infra
+    custom_cert: false
+    custom_cert_key: privRepoCert
+
+storageaccount:
+  name: masclusterstorageaccount
+  resourcegroup: masstorageaccountrg
+  location: eastus
+  kind: FileStorage
+  sku: Premium_LRS
+  accesstier: Hot
+  min_tls_version: "TLS1_2"
+  publicaccess: "Disabled"
+  privendpointname: masstorageaccountpe
+  block:
+    create: true
+    sku: Premium_LRS
+    sc_name: managed-premium
+  file:
+    create: true
+    sku: Premium_LRS
+    sc_name: azurefiles-premium
+    secretname: sakey-secret
+    nfs_sharename: masfileshare
+
+imagemirror:
+  digest:
+    - source: ghcr.io/external-secrets/external-secrets-helm-operator
+      mirror: 
+        - acrarocr.azurecr.io/external-secrets/external-secrets-helm-operator
+    - source: ghcr.io/grafana/grafana-operator
+      mirror: 
+        - acrarocr.azurecr.io/grafana/grafana-operator
+  tag: 
+    - source: ghcr.io/external-secrets/external-secret
+      mirror: 
+        - acrarocr.azurecr.io/external-secretor
+
+egressip:
+  enabled: true
+  ip_addresses:
+    - 10.0.2.251
+    - 10.0.2.252
+    - 10.0.2.253
+
+autoscaler:
+  ## Bring up cluster when value is false, then change to true and update machineset list 
+  enabled: false
+  max_node_count: 9
+  min_aggregate_cpu: 48
+  max_aggregate_cpu: 144
+  min_aggregate_memory: 192
+  max_aggregate_memory: 576
+  min_replica_per_az: 1
+  max_replica_per_az: 3
+
+  machineset:
+    - mas-aro-cluster-wfgpz-worker-eastus1
+    - mas-aro-cluster-wfgpz-worker-eastus2
+    - mas-aro-cluster-wfgpz-worker-eastus3
+
+## MAS Variable
+mas:
+  prepare_install: true
+  instance_id: mas1
+  config_dir: $PWD/ansible/artefacts
+  license_file: $PWD/artefacts/license.dat
+  dro_email: <mas registration email>
+  dro_firstname: <installer first name>
+  dro_lastname: <installer lastname>
+  prometheus_alert_storageclass: managed-csi
+  prometheus_storageclass: azurefiles-premium
+  prometheus_user_storageclass: azurefiles-premium
+  grafana_storageclass: azurefiles-premium
+  mongodb_storageclass: azurefiles-premium
+  uds_storageclass: azurefiles-premium

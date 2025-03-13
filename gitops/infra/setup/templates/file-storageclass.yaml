@@ -1,0 +1,21 @@
+{{- if .Values.storageaccount.file.create -}}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.storageaccount.file.sc_name }}
+  annotations:
+    storageclass.kubernetes.io/is-default-class: 'false'
+parameters:
+  resourceGroup: {{ .Values.storageaccount.resourcegroup }}
+  skuName: {{ .Values.storageaccount.file.sku }}
+  storageAccount: {{ .Values.storageaccount.name }} #
+  secretName: {{ .Values.storageaccount.file.secretname }} #
+  secretNamespace: "default" #
+  location: {{ .Values.storageaccount.location }}
+  networkEndpointType: privateEndpoint
+  protocol: nfs
+provisioner: file.csi.azure.com
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+{{- end -}}

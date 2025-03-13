@@ -1,0 +1,38 @@
+
+
+
+#### Cluster Roles ####
+## cluster-admin -  A super-user that can perform any action in any project. 
+#                   When bound to a user with a local binding, they have full 
+#                   control over quota and every action on every resource in the project.
+## cluster-status - A user that can get basic cluster status information.
+## cluster-reader - A user that can get or view most of the objects but cannot modify them.
+clusterrolebinding:
+  - clusterrole: cluster-admin
+    groupids: 
+      - d0b32000-b1db-4eb1-89f3-685b871c06da
+
+### Role ####
+## admin      -  A project manager. If used in a local binding, an admin has rights to view any 
+#                resource in the project and modify any resource in the project except for quota. 
+## basic-user -  A user that can get basic information about projects and users.
+## edit       -  A user that can modify most objects in a project but does not have the power to 
+#                view or modify roles or bindings.
+## view       -  A user who cannot make any modifications, but can see most objects in a project. 
+#                They cannot view or modify roles or bindings.
+
+# rolebinding:
+#   - role: edit
+#     groupid: d0b32000-b1db-4eb1-89f3-685b871c0saa
+#     projects: 
+#       - cat-project
+#       - dog-project
+
+#   - role: admin
+#     groupid: d0b32000-b1db-4eb1-89f3-685b871c0poop
+#     projects: 
+#       - star-project
+#       - moon-project
+
+
+

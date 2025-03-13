@@ -1,0 +1,10 @@
+
+operators:
+  - name: external-secrets-operator
+    namespace: openshift-operators
+    channel: stable
+    installPlanApproval: Automatic
+    source: community-operators 
+    sourceNamespace: openshift-marketplace
+    operatorName: external-secrets-operator
+

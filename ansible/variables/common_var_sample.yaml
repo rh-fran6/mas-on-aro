@@ -1,0 +1,17 @@
+# Azure Key Vault Connection Details
+# common_var.yaml #
+subscription_id: <azure key vault subscription ID>
+tenant_id: <azure key vault tenat ID>
+akv_read_client_id: <azure key vault read service principal>
+akv_read_client_secret: <azure key vault read client secret>
+vault_name: <azure key vault name>
+akv_resource_group: <azure key vault resource group>
+user: <installer name>
+
+installer:
+  subscription_id: <installer subscription id>
+  tenant_id: <installer tenant id>
+
+
+
+
